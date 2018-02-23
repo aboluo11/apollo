@@ -9,42 +9,50 @@
 #include <stdio.h>
 #include <sys/sendfile.h>
 
-int append_res_line(conn_t* conn){
-    request_t* request = &conn->request;
-    buffer_t* buffer = &request->ob;
-    char* data = "HTTP/1.1 200 OK\r\n";
-    append_out_buffer(buffer, data);
-    request->action = append_res_header;
-    return OK;
+void append_res_line(conn_t* conn){
+    char* data;
+    if(request->status_code == 200){
+        data = "HTTP/1.1 200 OK\r\n";
+    }else if(request->status_code == 404){
+        data = "HTTP/1.1 404 Not Found\r\n";
+    }
+    append_out_buffer(conn, data);
 }
 
-int append_res_header(conn_t* conn){
-    request_t* request = &conn->request;
-    buffer_t* buffer = &request->ob;
-    char* data = "Content-Length: ";
-    int len = request->content_length;
-    char* s_len = (char*)malloc(13);
-    sprintf(s_len, "%d\r\n\r\n", len);
-    data = str_cat(data, s_len);
-    free(s_len);
-    append_out_buffer(buffer, data);
-    free(data);
-    request->action = send_buffer;
-    return OK;
+void append_content_length_header(conn_t* conn){
+    int len = conn->request->content_length;
+    char* data = alloc_pool(conn->pool, 29);
+    sprintf(data, "Content-Length: %d\r\n", len);
+    append_out_buffer(conn, data);
 }
 
-int send_buffer(conn_t* conn){
-    request_t* request = &conn->request;
-    buffer_t* buffer = &request->ob;
+void append_connection_header(conn_t* conn){
+    int keep_alive = conn->request->keep_alive;
+    char* data;
+    if(request->keep_alive) data = "keep-alive\r\n";
+    else data = "close\r\n";
+    data = str_cat("Connection: ", data);
+    append_out_buffer(conn, data);
+}
+
+void append_CRLF_header(conn_t* conn){
+    append_out_buffer(conn, "\r\n");
+}
+
+void append_res_header(conn_t* conn){
+    append_content_length_header(conn);
+    append_connection_header(conn);
+    append_CRLF_header(conn);
+}
+
+int send_one_buffer(buffer_t* buffer){
     int need_to_send = buffer->end - buffer->free - buffer->pos;
     while(1){
         int n = send(conn->fd, buffer->pos, need_to_send, 0);
         if(n > 0){
             buffer->pos += n;
             need_to_send -= n;
-            if(need_to_send) continue;
-            request->action = send_file;
-            return OK;
+            if(need_to_send == 0) return OK;
         }else if(n == -1){
             if(errno == EAGAIN || errno == EWOULDBLOCK){
                 return AGAIN;
@@ -54,16 +62,24 @@ int send_buffer(conn_t* conn){
     }
 }
 
+int send_buffer(conn_t* conn){
+    request_t* request = conn->request;
+    buffer_t* buffer = request->ob;
+    while(buffer){
+        int status = send_one_buffer(buffer);
+        if(status != OK) return status;
+        buffer = buffer->next;
+    }
+    request->action = send_file;
+    return send_file(conn);
+}
+
 int send_file(conn_t* conn){
-    request_t* request = &conn->request;
-    while(1){
+    request_t* request = conn->request;
+    while(request->content_length){
         int n = sendfile(conn->fd, request->file_fd, NULL, request->content_length);
-        if(n >= 0){
+        if(n > 0){
             request->content_length -= n;
-            if(request->content_length) continue;
-            request->action = NULL;
-            close(request->file_fd);
-            return OK;
         }else if(n == -1){
             if(errno == EAGAIN){
                 return AGAIN;
@@ -71,37 +87,38 @@ int send_file(conn_t* conn){
             return ERROR;
         }
     }
+    if(request->keep_alive){
+        reset_request(conn);
+        change_to_request(conn);
+        return OK;
+    }else{
+        return ERROR;
+    }
 }
 
-int get_file_info(conn_t* conn){
-    request_t* request = &conn->request;
+void get_file_info(conn_t* conn){
+    request_t* request = conn->request;
     char* root = "/root/share/apollo/www";
-    char* location = request->uri_start;
-    char* path = str_cat(root, location);
+    char* path = str_cat(conn, root, request->uri_start);
     int file_fd = open(path, O_RDONLY);
-    if(file_fd == -1) return ERROR;
-    struct stat file_stat;
-    fstat(file_fd, &file_stat);
-    if(S_ISDIR(file_stat.st_mode)){
-        char* new_path = str_cat(path, "index.html");
-        close(file_fd);
-        free(path);
-        path = new_path;
-        file_fd = open(path, O_RDONLY);
-        if(file_fd == -1) return ERROR;
+    if(file_fd == -1){
+        request->status_code = 404;
+        request->uri_start = "404.html";
+        get_file_info(conn);
+    }else{
+        struct stat file_stat;
         fstat(file_fd, &file_stat);
+        if(S_ISDIR(file_stat.st_mode)){
+            request->uri_start = str_cat(request->uri_start, "index.html");
+            get_file_info(conn);
+            return;
+        }
+        request->file_fd = file_fd;
+        request->content_length = file_stat.st_size;
     }
-    request->file_fd = file_fd;
-    request->content_length = file_stat.st_size;
-    request->action = append_res_line;
-    return OK;
 }
 
 int handle_response(conn_t* conn){
-    request_t* request = &conn->request;
-    int status;
-    do{
-        status = request->action(conn);
-    }while(status == OK && request->action);
-    return status;
+    request_t* request = conn->request;
+    return request->action(conn);
 }

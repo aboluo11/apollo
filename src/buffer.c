@@ -2,47 +2,65 @@
 #include <stdlib.h>
 #include <string.h>
 
-void realloc_ib(request_t* request){
-    buffer_t* buffer = &request->ib;
-    char* old_buf = buffer->start;
-    int old_len = buffer->end - buffer->start;
-    int new_len = old_len * 2;
-    char* new_buf = (char*)malloc(new_len);
-    int diff = new_buf - old_buf;
-    memcpy(new_buf, old_buf, old_len);
-    buffer->pos = buffer->pos + diff;
-    buffer->start = new_buf;
-    buffer->end = new_buf + new_len;
-    buffer->free = old_len;
-    request->uri_start += diff;
-    request->uri_end += diff;
-    free(old_buf);
+buffer_t* create_buf(conn_t* conn){
+    buffer_t* buffer = alloc_pool(conn->pool, sizeof(buffer_t));
+    buffer->pos = alloc_pool(conn->pool, BUFFER_SIZE);
+    buffer->end = buffer->pos + BUFFER_SIZE;
+    buffer->free = BUFFER_SIZE;
+    buffer->next = NULL;
+    return buffer;
 }
 
-void ensure_ib_available(request_t* request){
-    buffer_t* buffer = &request->ib;
-    if(buffer->free) return;
-    realloc_ib(request);
-}
-
-void realloc_ob(buffer_t* buffer){
-    char* old_buf = buffer->start;
-    int old_len = buffer->end - buffer->start;
-    char* new_buf = (char*)malloc(old_len*2);
-    int diff = new_buf - old_buf;
-    memcpy(new_buf, old_buf, buffer->pos - buffer->start);
-    buffer->start = new_buf;
-    buffer->end = new_buf + old_len * 2;
-    buffer->pos += diff;
-    buffer->free += old_len;
-    free(old_buf);
-}
-
-int append_out_buffer(buffer_t* buffer, char* data){
-    int len = strlen(data);
-    while(buffer->free < len){
-        realloc_ob(buffer);
+void realloc_ib(conn_t* conn){
+    request_t* request = conn->request;
+    buffer_t* old_buf = request->ib;
+    buffer_t* new_buf = create_buf(conn);
+    char* cp_start;
+    int cp_len;
+    request->ib = new_buf;
+    if(request->need_to_copy == 0) return;
+    if(request->action == parse_request_line){
+        cp_start = request->uri_start;
+        request->uri_start = new_buf->pos;
+    }else{
+        cp_start = header_key;
+        int key_value_diff = request->header_value - request->header_key;
+        request->header_key = new_buf->pos;
+        request->header_value = request->header_key + key_value_diff;
     }
-    memcpy(buffer->end - buffer->free, data, len);
-    buffer->free -= len;
+    cp_len = old_buf->end - cp_start;
+    memcpy(new_buf->pos, cp_start, cplen);
+    new_buf->pos += cp_len;
+    new_buf->free -= cp_len;
+}
+
+void realloc_ob(conn_t* conn){
+    request_t* request = conn->request;
+    buffer_t* old_buf;
+    while(old_buf->next){
+        old_buf = old_buf->next;
+    }
+    buffer_t* new_buf = create_buf(conn);
+    old_buf->next = new_buf;
+}
+
+void append_out_buffer(conn_t* conn, char* data){
+    int len = strlen(data);
+    buffer_t* buffer = conn->request->ob;
+    while(buffer->next){
+        buffer = buffer->next;
+    }
+    int sent = 0;
+    while(len){
+        if(buffer->free){
+            int send = len > free ? free : len;
+            memcpy(buffer->pos, data + sent, send);
+            sent += send;
+            len -= send;
+            buffer->free -= send;
+        }else{
+            realloc_ob(conn);
+            buffer = buffer->next;
+        }
+    }
 }

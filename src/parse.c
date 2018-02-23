@@ -1,9 +1,10 @@
 #include "server.h"
 
 int parse_request_line(conn_t* conn){
-    request_t* request = &conn->request;
-    buffer_t* buffer = &request->ib;
-    for(char* p = buffer->pos; p < buffer->end - buffer->free; p++, buffer->pos++){
+    request_t* request = conn->request;
+    buffer_t* buffer = request->ib;
+    char* p;
+    for(p = buffer->pos; p < buffer->end - buffer->free; p++){
         switch(request->parse_state){
             case METHOD:
                 switch(*p){
@@ -19,13 +20,14 @@ int parse_request_line(conn_t* conn){
                 }
                 break;
             case SPACE_BEFORE_URI:
+                request->need_to_copy = 1;
                 request->uri_start = p;
                 request->parse_state = URI;
                 break;
             case URI:
                 switch(*p){
                     case ' ':
-                        request->uri_end = p;
+                        request->need_to_copy = 0;
                         request->parse_state = SPACE_BEFORE_VERSION;
                         *p = '\0';
                         break;
@@ -120,27 +122,60 @@ int parse_request_line(conn_t* conn){
             case RL_ALMOST_DONE:
                 switch(*p){
                     case '\n':
-                        request->parse_state = HL_NORMAL;
-                        request->action = parse_request_header;
-                        buffer->pos++;
-                        return OK;
+                        goto done;
                     default:
                         return ERROR;
                 }
         }
     }
+    request->parse_state = HL_LF;
+    buffer->pos = p;
     return AGAIN;
+
+done:
+    buffer->pos = p + 1;
+    request->action = parse_request_header;
+    return parse_request_header(conn);
 }
 
 int parse_request_header(conn_t* conn){
-    request_t* request = &conn->request;
-    buffer_t* buffer = &request->ib;
-    for(char* p = buffer->pos; p < buffer->end - buffer->free; p++, buffer->pos++){
+    request_t* request = conn->request;
+    buffer_t* buffer = request->ib;
+    char* p;
+    for(p = buffer->pos; p < buffer->end - buffer->free; p++){
         switch(request->parse_state){
-            case HL_NORMAL:
+            case HL_KEY:
+                switch(*p){
+                    case ':':
+                        request->parse_state = HL_COLON;
+                        *p = 0;
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case HL_COLON:
+                switch(*p){
+                    case ' ':
+                        request->parse_state = HL_SPACE;
+                        break;
+                    default:
+                        return ERROR;
+                }
+                break;
+            case HL_SPACE:
+                switch(*p){
+                    default:
+                        request->parse_state = HL_VALUE;
+                        request->header_value = p;
+                        break;
+                }
+                break;
+            case HL_VALUE:
                 switch(*p){
                     case '\r':
                         request->parse_state = HL_CR;
+                        *p = 0;
                         break;
                     default:
                         break;
@@ -149,8 +184,11 @@ int parse_request_header(conn_t* conn){
             case HL_CR:
                 switch(*p){
                     case '\n':
+                        request->need_to_copy = 0;
                         request->parse_state = HL_LF;
-                        break;
+                        if(handle_request_header(conn) == ERROR){
+                            return ERROR;
+                        }
                     default:
                         return ERROR;
                 }
@@ -161,21 +199,26 @@ int parse_request_header(conn_t* conn){
                         request->parse_state = HL_END_CR;
                         break;
                     default:
-                        request->parse_state = HL_NORMAL;
+                        request->need_to_copy = 1;
+                        request->parse_state = HL_KEY;
+                        request->header_key = p;
                         break;
                 }
                 break;
             case HL_END_CR:
                 switch(*p){
                     case '\n':
-                        request->parse_state = HL_DONE;
-                        request->action = NULL;
-                        buffer->pos++;
-                        return OK;
+                        goto done;
                     default:
                         return ERROR;
                 }
         }
     }
+    buffer->pos = p;
     return AGAIN;
+
+done:
+    buffer->pos = p + 1;
+    request->parse_state = HL_DONE;
+    return OK;
 }
