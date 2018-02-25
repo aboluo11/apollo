@@ -1,3 +1,4 @@
+#include <signal.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -5,11 +6,15 @@
 #include <sys/epoll.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include "server.h"
 
-dict_t* header_dict = init_header_dict();
+dict_t* header_dict;
 
 void startup(){
+	signal(SIGPIPE, SIG_IGN);
+	header_dict = header_dict_init();
 	int listen_fd = start_listen();
 	if(listen_fd == ERROR){
 		printf("listen failed\n");
@@ -24,7 +29,7 @@ void startup(){
 		for(int i=0; i<n; i++){
 			int fd = *((int*)(events[i].data.ptr));
 			if(fd == listen_fd){
-				accept_conn(listen_fd, epfd);
+				conn_accept(listen_fd, epfd);
 			}else{
 				int status;
 				conn_t* conn = (conn_t*)(events[i].data.ptr);
@@ -34,17 +39,29 @@ void startup(){
 					status = handle_response(conn);
 				}
 				if(status == ERROR) {
-					expire_conn(conn);
+					conn_expire(conn);
 				}
 				else {
-					reactive_conn(conn);
+					conn_reactive(conn);
 				}
 			}
 		}
-		clear_conn();
+		conn_clear();
 	}
 }
 
 int main(int argc, char* argv[]){
-	startup();
+	if(DEBUG){
+		goto debug;
+	}
+	for(int i = 0; i < WORKERS; i++){
+		if(fork() == 0){
+			startup();
+		}
+	}
+	int wstatus;
+	wait(&wstatus);
+
+	debug:
+		startup();
 }

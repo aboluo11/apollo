@@ -11,6 +11,7 @@
 
 void append_res_line(conn_t* conn){
     char* data;
+    request_t* request = conn->request;
     if(request->status_code == 200){
         data = "HTTP/1.1 200 OK\r\n";
     }else if(request->status_code == 404){
@@ -21,7 +22,7 @@ void append_res_line(conn_t* conn){
 
 void append_content_length_header(conn_t* conn){
     int len = conn->request->content_length;
-    char* data = alloc_pool(conn->pool, 29);
+    char* data = pool_alloc(conn->pool, 29);
     sprintf(data, "Content-Length: %d\r\n", len);
     append_out_buffer(conn, data);
 }
@@ -29,9 +30,9 @@ void append_content_length_header(conn_t* conn){
 void append_connection_header(conn_t* conn){
     int keep_alive = conn->request->keep_alive;
     char* data;
-    if(request->keep_alive) data = "keep-alive\r\n";
+    if(conn->request->keep_alive) data = "keep-alive\r\n";
     else data = "close\r\n";
-    data = str_cat("Connection: ", data);
+    data = str_cat(conn, "Connection: ", data);
     append_out_buffer(conn, data);
 }
 
@@ -45,7 +46,8 @@ void append_res_header(conn_t* conn){
     append_CRLF_header(conn);
 }
 
-int send_one_buffer(buffer_t* buffer){
+int send_one_buffer(conn_t* conn){
+    buffer_t* buffer = conn->request->ob;
     int need_to_send = buffer->end - buffer->free - buffer->pos;
     while(1){
         int n = send(conn->fd, buffer->pos, need_to_send, 0);
@@ -66,7 +68,7 @@ int send_buffer(conn_t* conn){
     request_t* request = conn->request;
     buffer_t* buffer = request->ob;
     while(buffer){
-        int status = send_one_buffer(buffer);
+        int status = send_one_buffer(conn);
         if(status != OK) return status;
         buffer = buffer->next;
     }
@@ -88,7 +90,7 @@ int send_file(conn_t* conn){
         }
     }
     if(request->keep_alive){
-        reset_request(conn);
+        request_reset(conn);
         change_to_request(conn);
         return OK;
     }else{
@@ -109,7 +111,7 @@ void get_file_info(conn_t* conn){
         struct stat file_stat;
         fstat(file_fd, &file_stat);
         if(S_ISDIR(file_stat.st_mode)){
-            request->uri_start = str_cat(request->uri_start, "index.html");
+            request->uri_start = str_cat(conn, request->uri_start, "index.html");
             get_file_info(conn);
             return;
         }

@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <time.h>
 #define BUFFER_SIZE 1024
 #define CHUNK_SIZE 2048
 #define MAXEVENTS 65536
@@ -6,6 +7,8 @@
 #define ERROR -1
 #define AGAIN -2
 #define TIMEOUT 75
+#define WORKERS 1
+#define DEBUG 1
 
 enum PARSE_STATE {
 	METHOD,
@@ -34,22 +37,12 @@ enum PARSE_STATE {
 
 struct conn;
 
-typedef int (*)(request_t*) header_handler;
-
-typedef struct{
-	char* key;
-	int (*handler)();
-}entry_t;
-
-typedef struct node{
-	entry_t entry;
-	struct node* next;
-}node_t;
-
-typedef struct{
-	node_t* table;
-	int size;
-}dict_t;
+typedef struct buffer{
+	char* end;
+	char* pos;
+	int free;
+	struct buffer* next;
+} buffer_t;
 
 typedef struct chunk{
 	char* start;
@@ -62,19 +55,26 @@ typedef struct{
 	chunk_t* current;
 }pool_t;
 
-typedef struct buffer{
-	char* end;
-	char* pos;
-	int free;
-	buffer_t* next;
-} buffer_t;
+typedef struct apl_timer{
+	struct apl_timer* prev;
+	struct apl_timer* next;
+	time_t expire_time;
+	struct conn* conn;
+}apl_timer_t;
+
+typedef struct{
+	apl_timer_t* head;
+	apl_timer_t* tail;
+}timers_t;
+
+typedef int (*header_handler)(struct conn*);
 
 typedef struct request{
 	buffer_t* ib;
 	buffer_t* ob;
 	int parse_state;
 	int content_length;   //remain length of response body need to be sent
-	int file_fd;          //default -1
+	int file_fd;
 	int (*action)(struct conn*);
 	char* uri_start;
 	int minor_version;
@@ -82,6 +82,7 @@ typedef struct request{
 	char* header_value;
 	int keep_alive;
 	int need_to_copy;   //default = 0
+	int status_code;
 } request_t;
 
 typedef struct conn{
@@ -89,33 +90,62 @@ typedef struct conn{
 	int epfd;
 	request_t* request;
 	pool_t* pool;
-	time_t expire_time;
-	int heap_index;
+	apl_timer_t* timer;
 } conn_t;
 
-int start_listen();
-void epoll_add_listen_fd(int listen_fd, int epfd);
-void startup();
+buffer_t* buf_create(conn_t* conn);
+void ib_realloc(conn_t* conn);
+void ob_realloc(conn_t* conn);
+void append_out_buffer(conn_t* conn, char* data);
+
+typedef struct node{
+	char* key;
+	int (*handler)();
+}node_t;
+
+typedef struct{
+	node_t* table;
+	int size;
+}dict_t;
+
+dict_t* header_dict;
+
+dict_t* dict_init(int size);
+header_handler dict_get(dict_t* dict, char* key);
+void dict_add(dict_t* dict, char* key, header_handler);
+dict_t* header_dict_init();
+
+chunk_t* chunk_init();
+pool_t* pool_init();
+void pool_realloc(pool_t* pool);
+void* pool_alloc(pool_t* pool, int size);
+void* pool_calloc(pool_t* pool, int size);
+void pool_free(conn_t* conn);
+
+char* str_cat(conn_t* conn, char* s1, char* s2);
+
 int parse_request_line(conn_t* conn);
 int parse_request_header(conn_t* conn);
-void set_fd_non_blocking(int fd);
-void init_request(request_t* request);
-void init_buffer(buffer_t* buffer);
-conn_t* init_conn(int fd, int epfd);
-void accept_conn(int listen_fd, int epfd);
-void change_to_response(conn_t* conn);
-void close_conn(conn_t* conn);
-void realloc_ib(request_t* request);
-void realloc_ob(buffer_t* buffer);
-int append_out_buffer(buffer_t* buffer, char* data);
-int read_in_stream(conn_t* conn);
-int handle_request(conn_t* conn);
-int append_res_line(conn_t* conn);
-int append_res_header(conn_t* conn);
-int send_buffer(conn_t* conn);
-int send_file(conn_t* conn);
-int get_file_info(conn_t* conn);
+
 int handle_response(conn_t* conn);
-char* str_cat(char* s1, char* s2);
+int handle_request(conn_t* conn);
+
+void conn_register(conn_t* conn);
+void conn_unregister(conn_t* conn);
+void get_file_info(conn_t* conn);
+void append_res_line(conn_t* conn);
+void append_res_header(conn_t* conn);
 int handle_request_header(conn_t* conn);
-int (*)() get_dict(dict_t* dict, char* key);
+
+int send_file(conn_t* conn);
+int header_conn_handler(conn_t* conn);
+request_t* request_init(pool_t* pool);
+void change_to_response(conn_t* conn);
+void request_reset(conn_t* conn);
+void change_to_request(conn_t* conn);
+int start_listen();
+void epoll_add_listen_fd(int listen_fd, int epfd);
+void conn_accept(int listen_fd, int epfd);
+void conn_expire(conn_t* conn);
+void conn_reactive(conn_t* conn);
+void conn_clear();

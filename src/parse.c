@@ -132,10 +132,10 @@ int parse_request_line(conn_t* conn){
     buffer->pos = p;
     return AGAIN;
 
-done:
-    buffer->pos = p + 1;
-    request->action = parse_request_header;
-    return parse_request_header(conn);
+    done:
+        buffer->pos = p + 1;
+        request->action = parse_request_header;
+        return parse_request_header(conn);
 }
 
 int parse_request_header(conn_t* conn){
@@ -217,8 +217,8 @@ int parse_request_header(conn_t* conn){
     buffer->pos = p;
     return AGAIN;
 
-done:
-    buffer->pos = p + 1;
-    request->parse_state = HL_DONE;
-    return OK;
+    done:
+        buffer->pos = p + 1;
+        request->parse_state = HL_DONE;
+        return OK;
 }

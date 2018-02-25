@@ -1,30 +1,32 @@
 #include <string.h>
+#include <stdlib.h>
+#include "server.h"
 
-chunk_t* init_chunk(){
+chunk_t* chunk_init(){
     chunk_t* chunk = malloc(CHUNK_SIZE);
-    chunk->start = chunk;
-    chunk->pos = chunk + sizeof(chunk_t);
+    chunk->start = (char*)chunk;
+    chunk->pos = (char*)chunk + sizeof(chunk_t);
     chunk->next = NULL;
     return chunk;
 }
 
-pool_t* init_pool(){
-    chunk_t* chunk = init_chunk();
-    pool_t* pool = chunk->pos;
+pool_t* pool_init(){
+    chunk_t* chunk = chunk_init();
+    pool_t* pool = (pool_t*)chunk->pos;
     chunk->pos += sizeof(pool_t);
     pool->first = chunk;
     pool->current = chunk;
     return pool;
 }
 
-void realloc_pool(pool_t* pool){
-    chunk_t* new_chunk = init_chunk();
+void pool_realloc(pool_t* pool){
+    chunk_t* new_chunk = chunk_init();
     chunk_t* old_chunk = pool->current;
     old_chunk->next = new_chunk;
     pool->current = new_chunk;
 }
 
-void* alloc_pool(pool_t* pool, int size){
+void* pool_alloc(pool_t* pool, int size){
     if(size > CHUNK_SIZE) return NULL;
     chunk_t* chunk = pool->current;
     int free = chunk->start + CHUNK_SIZE - chunk->pos;
@@ -32,13 +34,23 @@ void* alloc_pool(pool_t* pool, int size){
         chunk->pos += size;
         return chunk->pos - size;
     }else{
-        realloc_pool(pool);
-        return alloc_pool(pool, size);
+        pool_realloc(pool);
+        return pool_alloc(pool, size);
     }
 }
 
-void* calloc_pool(pool_t* pool, int size){
-    void* p = alloc_pool(pool, size);
+void* pool_calloc(pool_t* pool, int size){
+    void* p = pool_alloc(pool, size);
     memset(p, 0, size);
     return p;
+}
+
+void pool_free(conn_t* conn){
+	chunk_t* chunk = conn->pool->first;
+	chunk_t* next;
+	while(chunk){
+		next = chunk->next;
+		free(chunk);
+		chunk = next;
+	}
 }

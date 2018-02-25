@@ -9,7 +9,7 @@ int read_in_stream(conn_t* conn){
     request_t* request = conn->request;
     buffer_t* buffer = request->ib;
     if(buffer->end - buffer->free != buffer->pos){
-        return buffer->end - buffer->free;
+        return buffer->end - buffer->free - buffer->pos;
     }
     int n = recv(conn->fd, buffer->end - buffer->free, buffer->free, 0);
     if(n == 0) return ERROR;
@@ -24,7 +24,8 @@ int read_in_stream(conn_t* conn){
     return n;
 }
 
-int header_conn_handler(request_t* request){
+int header_conn_handler(conn_t* conn){
+    request_t* request = conn->request;
     if(strcmp(request->header_value, "keep-alive") == 0){
         request->keep_alive = 1;
         return OK;
@@ -37,15 +38,19 @@ int header_conn_handler(request_t* request){
 
 int handle_request_header(conn_t* conn){
     request_t* request = conn->request;
-    header_handler = get_dict(header_dict, request->header_key);
+    header_handler handler = dict_get(header_dict, request->header_key);
     if(handler){
-        return header_handler(request);
+        return handler(conn);
     }else{
         return OK;
     }
 }
 
 int handle_request(conn_t* conn){
+    if(!conn->pool){
+        conn->pool = pool_init();
+        conn->request = request_init(conn->pool);
+    }
     request_t* request = conn->request;
     buffer_t* buffer = request->ib;
     while(1){
@@ -58,20 +63,19 @@ int handle_request(conn_t* conn){
             return OK;
         }else if(status == AGAIN){
             if(buffer->free == 0){
-                realloc_ib(conn);
+                ib_realloc(conn);
             }
         }
     }
 }
 
-void reset_request(conn_t* conn){
+void request_reset(conn_t* conn){
     request_t* request = conn->request;
     buffer_t* ib = request->ib;
     if(ib->end - ib->free != ib->pos){
         handle_request(conn);
     }else{
-        free_conn(conn);
-        conn->pool = init_pool();
-        conn->request = init_request(conn->pool);
+        pool_free(conn);
+        conn->pool = NULL;
     }
 }

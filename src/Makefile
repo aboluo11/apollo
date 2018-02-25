@@ -1,7 +1,7 @@
 CC = gcc
-CFLAGS = -g -O0
+CFLAGS = -g -Og
 OBJS_DIR = ../build/
-SRCS = buffer.c conn.c parse.c request.c response.c server.c string.c dist.c
+SRCS = buffer.c conn.c parse.c request.c response.c server.c string.c dict.c pool.c
 OBJS = $(addprefix $(OBJS_DIR), $(SRCS:.c=.o))
 
 all: 
