@@ -65,7 +65,10 @@ typedef struct apl_timer{
 typedef struct{
 	apl_timer_t* head;
 	apl_timer_t* tail;
+	int size;
 }timers_t;
+
+extern timers_t timers;
 
 typedef int (*header_handler)(struct conn*);
 
@@ -93,7 +96,6 @@ typedef struct conn{
 	apl_timer_t* timer;
 } conn_t;
 
-buffer_t* buf_create(conn_t* conn);
 void ib_realloc(conn_t* conn);
 void ob_realloc(conn_t* conn);
 void append_out_buffer(conn_t* conn, char* data);
@@ -149,3 +151,9 @@ void conn_accept(int listen_fd, int epfd);
 void conn_expire(conn_t* conn);
 void conn_reactive(conn_t* conn);
 void conn_clear();
+buffer_t* buffer_init(pool_t* pool);
+int send_buffer(conn_t* conn);
+
+void timers_add_last(apl_timer_t* timer);
+void timers_add_first(apl_timer_t* timer);
+void timers_del(apl_timer_t* timer);

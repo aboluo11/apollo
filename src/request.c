@@ -5,6 +5,18 @@
 #include <sys/socket.h>
 #include <string.h>
 
+request_t* request_init(pool_t* pool){
+	request_t* request = pool_alloc(pool, sizeof(request_t));
+	request->parse_state = METHOD;
+	request->action = parse_request_line;
+	request->ib = buffer_init(pool);
+	request->ob = buffer_init(pool);
+	request->need_to_copy = 0;
+    request->keep_alive = 0;
+    request->status_code = 200;
+	return request;
+}
+
 int read_in_stream(conn_t* conn){
     request_t* request = conn->request;
     buffer_t* buffer = request->ib;

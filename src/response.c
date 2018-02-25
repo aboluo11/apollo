@@ -105,7 +105,7 @@ void get_file_info(conn_t* conn){
     int file_fd = open(path, O_RDONLY);
     if(file_fd == -1){
         request->status_code = 404;
-        request->uri_start = "404.html";
+        request->uri_start = "/404.html";
         get_file_info(conn);
     }else{
         struct stat file_stat;

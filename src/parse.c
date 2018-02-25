@@ -122,20 +122,24 @@ int parse_request_line(conn_t* conn){
             case RL_ALMOST_DONE:
                 switch(*p){
                     case '\n':
+                        request->parse_state = HL_LF;
                         goto done;
                     default:
                         return ERROR;
                 }
         }
     }
-    request->parse_state = HL_LF;
     buffer->pos = p;
     return AGAIN;
 
     done:
         buffer->pos = p + 1;
-        request->action = parse_request_header;
-        return parse_request_header(conn);
+        if(request->minor_version){
+            request->action = parse_request_header;
+            return parse_request_header(conn);
+        }else{
+            return OK;
+        }
 }
 
 int parse_request_header(conn_t* conn){
@@ -176,6 +180,7 @@ int parse_request_header(conn_t* conn){
                     case '\r':
                         request->parse_state = HL_CR;
                         *p = 0;
+                        request->need_to_copy = 0;
                         break;
                     default:
                         break;
@@ -184,11 +189,11 @@ int parse_request_header(conn_t* conn){
             case HL_CR:
                 switch(*p){
                     case '\n':
-                        request->need_to_copy = 0;
                         request->parse_state = HL_LF;
                         if(handle_request_header(conn) == ERROR){
                             return ERROR;
                         }
+                        break;
                     default:
                         return ERROR;
                 }
@@ -208,6 +213,7 @@ int parse_request_header(conn_t* conn){
             case HL_END_CR:
                 switch(*p){
                     case '\n':
+                        request->parse_state = HL_DONE;
                         goto done;
                     default:
                         return ERROR;
@@ -219,6 +225,5 @@ int parse_request_header(conn_t* conn){
 
     done:
         buffer->pos = p + 1;
-        request->parse_state = HL_DONE;
         return OK;
 }

@@ -7,8 +7,6 @@
 #include <sys/epoll.h>
 #include <netinet/in.h>
 
-timers_t timers;
-
 int start_listen(){
     int listen_fd;
     struct sockaddr_in server_addr = {0};
@@ -46,24 +44,6 @@ void fd_set_non_blocking(int fd){
 	fcntl(fd, F_SETFL, flags);
 }
 
-buffer_t* buffer_init(pool_t* pool){
-	buffer_t* buffer = pool_alloc(pool, sizeof(buffer_t));
-	buffer->pos = pool_alloc(pool, BUFFER_SIZE);
-	buffer->end = buffer->pos + BUFFER_SIZE;
-	buffer->free = BUFFER_SIZE;
-	return buffer;
-}
-
-request_t* request_init(pool_t* pool){
-	request_t* request = pool_alloc(pool, sizeof(request_t));
-	request->parse_state = METHOD;
-	request->action = parse_request_line;
-	request->ib = buffer_init(pool);
-	request->ob = buffer_init(pool);
-	request->need_to_copy = 0;
-	return request;
-}
-
 conn_t* conn_init(int fd, int epfd){
 	pool_t* pool = pool_init();
 	conn_t* conn = malloc(sizeof(conn_t));
@@ -93,7 +73,7 @@ void change_to_response(conn_t* conn){
 	get_file_info(conn);
 	append_res_line(conn);
 	append_res_header(conn);
-	conn->request->action = handle_response;
+	conn->request->action = send_buffer;
 }
 
 void change_to_request(conn_t* conn){
@@ -101,7 +81,7 @@ void change_to_request(conn_t* conn){
 	event.events = EPOLLIN;
 	event.data.ptr = conn;
 	epoll_ctl(conn->epfd, EPOLL_CTL_MOD, conn->fd, &event);
-	conn->request->action = handle_request;
+	conn->request->action = parse_request_line;
 }
 
 void conn_close(conn_t* conn){
@@ -109,49 +89,12 @@ void conn_close(conn_t* conn){
 	close(conn->fd);
 	epoll_ctl(conn->epfd, EPOLL_CTL_DEL, conn->fd, NULL);
 	pool_free(conn);
+	free(conn->timer);
 	free(conn);
 }
 
-void timers_add_last(apl_timer_t* timer){
-	if(timers.head){
-		timer->prev = timers.tail;
-		timer->next = NULL;
-		timer->prev->next = timer;
-		timers.tail = timer;
-	}else{
-		timer->prev = NULL;
-		timer->next = NULL;
-		timers.head = timer;
-		timers.tail = timer;
-	}
-}
-
-void timers_add_first(apl_timer_t* timer){
-	if(timers.head){
-		timer->prev = NULL;
-		timer->next = timers.head;
-		timers.head = timer;
-	}else{
-		timers.head = timer;
-		timers.tail = timer;
-		timer->prev = NULL;
-		timer->next = NULL;
-	}
-}
-
-void timers_del(apl_timer_t* timer){
-	if(timer->prev){
-		timer->prev->next = timer->next;
-	}else{
-		timers.head = timer->next;
-	}
-	if(timers.tail == timer){
-		timers.tail = NULL;
-	}
-}
-
 void conn_register(conn_t* conn){
-	apl_timer_t* timer = pool_alloc(conn->pool, sizeof(apl_timer_t));
+	apl_timer_t* timer = calloc(1, sizeof(apl_timer_t));
 	timer->expire_time = time(NULL) + TIMEOUT;
 	timer->conn = conn;
 	conn->timer = timer;
@@ -164,7 +107,7 @@ void conn_unregister(conn_t* conn){
 
 void conn_clear(){
 	time_t now = time(NULL);
-	while(timers.head){
+	while(timers.size){
 		apl_timer_t* head = timers.head;
 		if(head->expire_time <= now){
 			conn_close(head->conn);
