@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 
 int start_listen(){
     int listen_fd;
@@ -44,6 +45,11 @@ void fd_set_non_blocking(int fd){
 	fcntl(fd, F_SETFL, flags);
 }
 
+void fd_set_no_delay(int fd){
+	int on = 1;
+	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on));
+}
+
 conn_t* conn_init(int fd, int epfd){
 	pool_t* pool = pool_init();
 	conn_t* conn = malloc(sizeof(conn_t));
@@ -51,6 +57,7 @@ conn_t* conn_init(int fd, int epfd){
 	conn->fd = fd;
 	conn->epfd = epfd;
 	fd_set_non_blocking(fd);
+	fd_set_no_delay(fd);
 	conn->request = request_init(pool);
 	return conn;
 }

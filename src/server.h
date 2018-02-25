@@ -8,7 +8,7 @@
 #define AGAIN -2
 #define TIMEOUT 75
 #define WORKERS 1
-#define DEBUG 1
+#define DEBUG 0
 
 enum PARSE_STATE {
 	METHOD,
