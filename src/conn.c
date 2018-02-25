@@ -88,7 +88,9 @@ void conn_close(conn_t* conn){
 	conn_unregister(conn);
 	close(conn->fd);
 	epoll_ctl(conn->epfd, EPOLL_CTL_DEL, conn->fd, NULL);
-	pool_free(conn);
+	if(conn->pool){
+		pool_free(conn);
+	}
 	free(conn->timer);
 	free(conn);
 }
