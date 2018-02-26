@@ -90,7 +90,6 @@ void change_to_request(conn_t* conn){
 	event.events = EPOLLIN;
 	event.data.ptr = conn;
 	epoll_ctl(conn->epfd, EPOLL_CTL_MOD, conn->fd, &event);
-	conn->request->action = parse_request_line;
 }
 
 void conn_close(conn_t* conn){
