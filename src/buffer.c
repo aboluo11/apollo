@@ -11,27 +11,26 @@ buffer_t* buffer_init(pool_t* pool){
 	return buffer;
 }
 
-void ib_realloc(conn_t* conn){
+int ib_realloc(conn_t* conn){
     request_t* request = conn->request;
+    if(request->need_to_copy == 0){
+        return OK;
+    }
+    char* cp_start = request->header_key;
+    int cp_len = request->ib->end - cp_start;
+    if(cp_len == BUFFER_SIZE){
+        return ERROR;
+    }
     buffer_t* old_buf = request->ib;
     buffer_t* new_buf = buffer_init(request->pool);
-    char* cp_start;
-    int cp_len;
     request->ib = new_buf;
-    if(request->need_to_copy == 0) return;
-    if(request->action == parse_request_line){
-        cp_start = request->uri_start;
-        request->uri_start = new_buf->pos;
-    }else{
-        cp_start = request->header_key;
-        int key_value_diff = request->header_value - request->header_key;
-        request->header_key = new_buf->pos;
-        request->header_value = request->header_key + key_value_diff;
-    }
-    cp_len = old_buf->end - cp_start;
+    int key_value_diff = request->header_value - request->header_key;
+    request->header_key = new_buf->pos;
+    request->header_value = request->header_key + key_value_diff;
     memcpy(new_buf->pos, cp_start, cp_len);
     new_buf->pos += cp_len;
     new_buf->free -= cp_len;
+    return OK;
 }
 
 void ob_realloc(conn_t* conn){

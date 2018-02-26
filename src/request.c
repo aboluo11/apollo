@@ -5,17 +5,21 @@
 #include <sys/socket.h>
 #include <string.h>
 
+void request_pipe_init(request_t* request){
+	request->parse_state = METHOD;
+	request->action = parse_request_line;
+	request->need_to_copy = 0;
+    request->keep_alive = 0;
+    request->status_code = 200;
+}
+
 request_t* request_init(){
     pool_t* pool = pool_init();
 	request_t* request = pool_alloc(pool, sizeof(request_t));
     request->pool = pool;
-	request->parse_state = METHOD;
-	request->action = parse_request_line;
 	request->ib = buffer_init(pool);
 	request->ob = buffer_init(pool);
-	request->need_to_copy = 0;
-    request->keep_alive = 0;
-    request->status_code = 200;
+    request_pipe_init(request);
 	return request;
 }
 
@@ -78,7 +82,13 @@ int handle_request(conn_t* conn){
             return change_to_response(conn);
         }else if(status == AGAIN){
             if(buffer->free == 0){
-                ib_realloc(conn);
+                if(request->action == parse_request_line){
+                    return ERROR;
+                }else{
+                    if(ib_realloc(conn) == ERROR){
+                        return ERROR;
+                    }
+                }
             }
         }
     }
@@ -88,6 +98,7 @@ void request_reset(conn_t* conn){
     request_t* request = conn->request;
     buffer_t* ib = request->ib;
     if(ib->end - ib->free != ib->pos){
+        request_pipe_init(request);
         handle_request(conn);
     }else{
         pool_free(request->pool);

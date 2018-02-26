@@ -20,14 +20,12 @@ int parse_request_line(conn_t* conn){
                 }
                 break;
             case SPACE_BEFORE_URI:
-                request->need_to_copy = 1;
                 request->uri_start = p;
                 request->parse_state = URI;
                 break;
             case URI:
                 switch(*p){
                     case ' ':
-                        request->need_to_copy = 0;
                         request->parse_state = SPACE_BEFORE_VERSION;
                         *p = '\0';
                         break;
