@@ -48,6 +48,11 @@ void* pool_calloc(pool_t* pool, int size){
 }
 
 void pool_free(pool_t* pool){
+    file_fd_chain_t* chain = pool->file_fd_chain;
+    while(chain){
+        close(chain->file_fd);
+        chain = chain->next;
+    }
 	chunk_t* chunk = pool->first;
 	chunk_t* next;
 	while(chunk){
@@ -55,9 +60,4 @@ void pool_free(pool_t* pool){
 		free(chunk);
 		chunk = next;
 	}
-    file_fd_chain_t* chain = pool->file_fd_chain;
-    while(chain){
-        close(chain->file_fd);
-        chain = chain->next;
-    }
 }
