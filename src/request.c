@@ -5,8 +5,10 @@
 #include <sys/socket.h>
 #include <string.h>
 
-request_t* request_init(pool_t* pool){
+request_t* request_init(){
+    pool_t* pool = pool_init();
 	request_t* request = pool_alloc(pool, sizeof(request_t));
+    request->pool = pool;
 	request->parse_state = METHOD;
 	request->action = parse_request_line;
 	request->ib = buffer_init(pool);
@@ -59,18 +61,20 @@ int handle_request_header(conn_t* conn){
 }
 
 int handle_request(conn_t* conn){
-    if(!conn->pool){
-        conn->pool = pool_init();
-        conn->request = request_init(conn->pool);
+    if(!conn->request){
+        conn->request = request_init();
     }
     request_t* request = conn->request;
     buffer_t* buffer = request->ib;
     while(1){
         int n = read_in_stream(conn);
-        if(n == AGAIN || n == ERROR) return n;
+        if(n == AGAIN || n == ERROR){
+            return n;
+        }
         int status = request->action(conn);
-        if(status == ERROR) return ERROR;
-        else if(status == OK){
+        if(status == ERROR){
+            return ERROR;
+        }else if(status == OK){
             return change_to_response(conn);
         }else if(status == AGAIN){
             if(buffer->free == 0){
@@ -86,7 +90,7 @@ void request_reset(conn_t* conn){
     if(ib->end - ib->free != ib->pos){
         handle_request(conn);
     }else{
-        pool_free(conn);
-        conn->pool = NULL;
+        pool_free(request->pool);
+        conn->request = NULL;
     }
 }

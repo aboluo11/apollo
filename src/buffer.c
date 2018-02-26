@@ -14,7 +14,7 @@ buffer_t* buffer_init(pool_t* pool){
 void ib_realloc(conn_t* conn){
     request_t* request = conn->request;
     buffer_t* old_buf = request->ib;
-    buffer_t* new_buf = buffer_init(conn->pool);
+    buffer_t* new_buf = buffer_init(request->pool);
     char* cp_start;
     int cp_len;
     request->ib = new_buf;
@@ -36,11 +36,11 @@ void ib_realloc(conn_t* conn){
 
 void ob_realloc(conn_t* conn){
     request_t* request = conn->request;
-    buffer_t* old_buf;
+    buffer_t* old_buf = request->ob;
     while(old_buf->next){
         old_buf = old_buf->next;
     }
-    buffer_t* new_buf = buffer_init(conn->pool);
+    buffer_t* new_buf = buffer_init(request->pool);
     old_buf->next = new_buf;
 }
 

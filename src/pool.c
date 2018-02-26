@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "server.h"
 
 chunk_t* chunk_init(){
@@ -16,6 +17,7 @@ pool_t* pool_init(){
     chunk->pos += sizeof(pool_t);
     pool->first = chunk;
     pool->current = chunk;
+    pool->file_fd_chain = NULL;
     return pool;
 }
 
@@ -45,12 +47,17 @@ void* pool_calloc(pool_t* pool, int size){
     return p;
 }
 
-void pool_free(conn_t* conn){
-	chunk_t* chunk = conn->pool->first;
+void pool_free(pool_t* pool){
+	chunk_t* chunk = pool->first;
 	chunk_t* next;
 	while(chunk){
 		next = chunk->next;
 		free(chunk);
 		chunk = next;
 	}
+    file_fd_chain_t* chain = pool->file_fd_chain;
+    while(chain){
+        close(chain->file_fd);
+        chain = chain->next;
+    }
 }

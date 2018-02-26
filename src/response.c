@@ -21,8 +21,9 @@ void append_res_line(conn_t* conn){
 }
 
 void append_content_length_header(conn_t* conn){
-    int len = conn->request->content_length;
-    char* data = pool_alloc(conn->pool, 29);
+    request_t* request = conn->request;
+    int len = request->content_length;
+    char* data = pool_alloc(request->pool, 29);
     sprintf(data, "Content-Length: %d\r\n", len);
     append_out_buffer(conn, data);
 }
@@ -110,8 +111,12 @@ int get_file_info(conn_t* conn){
         request->uri_start = "/404.html";
         return get_file_info(conn);
     }else{
+        file_fd_chain_t* chain = pool_alloc(request->pool, sizeof(file_fd_chain_t));
         struct stat file_stat;
         fstat(file_fd, &file_stat);
+        chain->file_fd = file_fd;
+        chain->next = request->pool->file_fd_chain;
+        request->pool->file_fd_chain = chain;
         if(S_ISDIR(file_stat.st_mode)){
             request->uri_start = str_cat(conn, request->uri_start, "index.html");
             return get_file_info(conn);

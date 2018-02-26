@@ -51,14 +51,12 @@ void fd_set_no_delay(int fd){
 }
 
 conn_t* conn_init(int fd, int epfd){
-	pool_t* pool = pool_init();
 	conn_t* conn = malloc(sizeof(conn_t));
-	conn->pool = pool;
 	conn->fd = fd;
 	conn->epfd = epfd;
 	fd_set_non_blocking(fd);
 	fd_set_no_delay(fd);
-	conn->request = request_init(pool);
+	conn->request = request_init();
 	return conn;
 }
 
@@ -99,8 +97,8 @@ void conn_close(conn_t* conn){
 	conn_unregister(conn);
 	close(conn->fd);
 	epoll_ctl(conn->epfd, EPOLL_CTL_DEL, conn->fd, NULL);
-	if(conn->pool){
-		pool_free(conn);
+	if(conn->request){
+		pool_free(conn->request->pool);
 	}
 	free(conn->timer);
 	free(conn);

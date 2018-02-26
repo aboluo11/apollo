@@ -57,9 +57,15 @@ typedef struct chunk{
 	struct chunk* next;
 }chunk_t;
 
+typedef struct file_fd_chain{
+	int file_fd;
+	struct file_fd_chain* next;
+}file_fd_chain_t;
+
 typedef struct{
 	chunk_t* first;
 	chunk_t* current;
+	file_fd_chain_t* file_fd_chain;
 }pool_t;
 
 typedef struct apl_timer{
@@ -80,6 +86,7 @@ extern timers_t timers;
 typedef int (*header_handler)(struct conn*);
 
 typedef struct request{
+	pool_t* pool;
 	buffer_t* ib;
 	buffer_t* ob;
 	int parse_state;
@@ -99,7 +106,6 @@ typedef struct conn{
 	int fd;
 	int epfd;
 	request_t* request;
-	pool_t* pool;
 	apl_timer_t* timer;
 } conn_t;
 
@@ -129,7 +135,7 @@ pool_t* pool_init();
 void pool_realloc(pool_t* pool);
 void* pool_alloc(pool_t* pool, int size);
 void* pool_calloc(pool_t* pool, int size);
-void pool_free(conn_t* conn);
+void pool_free(pool_t* pool);
 
 char* str_cat(conn_t* conn, char* s1, char* s2);
 
@@ -148,7 +154,7 @@ int handle_request_header(conn_t* conn);
 
 int send_file(conn_t* conn);
 int header_conn_handler(conn_t* conn);
-request_t* request_init(pool_t* pool);
+request_t* request_init();
 int change_to_response(conn_t* conn);
 void request_reset(conn_t* conn);
 void change_to_request(conn_t* conn);
