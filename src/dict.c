@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include "server.h"
 
+dict_t* header_dict;
+
 static int compute_hash(char* str, int size){
     unsigned int hash = 0;
     unsigned int seed = 131;

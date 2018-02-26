@@ -8,3 +8,9 @@ char* str_cat(conn_t* conn, char* s1, char* s2){
     strcat(res, s2);
     return res;
 }
+
+int stoi(char* str){
+    char* end = str + strlen(str);
+    int res = (int)strtol(str, &end, 10);
+    return res;
+}

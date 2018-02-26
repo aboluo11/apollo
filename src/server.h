@@ -1,14 +1,14 @@
 #include <stddef.h>
 #include <time.h>
 #define BUFFER_SIZE 1024
-#define CHUNK_SIZE 2048
+#define CHUNK_SIZE 4096
 #define MAXEVENTS 65536
 #define OK 0
 #define ERROR -1
 #define AGAIN -2
 #define TIMEOUT 75
-#define WORKERS 1
-#define DEBUG 0
+#define WORKERS 4
+#define DEBUG 1
 
 enum PARSE_STATE {
 	METHOD,
@@ -37,6 +37,13 @@ enum PARSE_STATE {
 
 struct conn;
 
+typedef struct{
+	int port;
+	char* root;
+}config_t;
+
+extern config_t config;
+
 typedef struct buffer{
 	char* end;
 	char* pos;
@@ -56,7 +63,7 @@ typedef struct{
 }pool_t;
 
 typedef struct apl_timer{
-	struct apl_timer* prev;
+	struct apl_timer* pre;
 	struct apl_timer* next;
 	time_t expire_time;
 	struct conn* conn;
@@ -110,7 +117,7 @@ typedef struct{
 	int size;
 }dict_t;
 
-dict_t* header_dict;
+extern dict_t* header_dict;
 
 dict_t* dict_init(int size);
 header_handler dict_get(dict_t* dict, char* key);
@@ -134,7 +141,7 @@ int handle_request(conn_t* conn);
 
 void conn_register(conn_t* conn);
 void conn_unregister(conn_t* conn);
-void get_file_info(conn_t* conn);
+int get_file_info(conn_t* conn);
 void append_res_line(conn_t* conn);
 void append_res_header(conn_t* conn);
 int handle_request_header(conn_t* conn);
@@ -142,7 +149,7 @@ int handle_request_header(conn_t* conn);
 int send_file(conn_t* conn);
 int header_conn_handler(conn_t* conn);
 request_t* request_init(pool_t* pool);
-void change_to_response(conn_t* conn);
+int change_to_response(conn_t* conn);
 void request_reset(conn_t* conn);
 void change_to_request(conn_t* conn);
 int start_listen();
@@ -157,3 +164,5 @@ int send_buffer(conn_t* conn);
 void timers_add_last(apl_timer_t* timer);
 void timers_add_first(apl_timer_t* timer);
 void timers_del(apl_timer_t* timer);
+
+int stoi(char* str);

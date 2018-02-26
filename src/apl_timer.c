@@ -7,7 +7,7 @@ void timers_add_last(apl_timer_t* timer){
         timers.head = timer;
         timers.tail = timer;
     }else{
-        timer->prev = timers.tail;
+        timer->pre = timers.tail;
         timers.tail->next = timer;
         timers.tail = timer;
     }
@@ -20,7 +20,7 @@ void timers_add_first(apl_timer_t* timer){
         timers.tail = timer;
     }else{
         timer->next = timers.head;
-        timers.head->prev = timer;
+        timers.head->pre = timer;
         timers.head = timer;
     }
     timers.size++;
@@ -33,11 +33,11 @@ void timers_del(apl_timer_t* timer){
     }else if(timer == timers.head){
         timers.head = timer->next;
     }else if(timer == timers.tail){
-        timers.tail = timer->prev;
+        timers.tail = timer->pre;
     }else{
-        timer->prev->next = timer->next;
+        timer->pre->next = timer->next;
     }
-    timer->prev = NULL;
+    timer->pre = NULL;
     timer->next = NULL;
     timers.size--;
 }

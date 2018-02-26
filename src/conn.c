@@ -12,7 +12,7 @@ int start_listen(){
     int listen_fd;
     struct sockaddr_in server_addr = {0};
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(8080);
+    server_addr.sin_port = htons(config.port);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     if((listen_fd = socket(PF_INET, SOCK_STREAM, 0)) < 0){
 		return ERROR;
@@ -72,15 +72,19 @@ void conn_accept(int listen_fd, int epfd){
 	conn_register(conn);
 }
 
-void change_to_response(conn_t* conn){
+int change_to_response(conn_t* conn){
 	struct epoll_event event;
 	event.events = EPOLLOUT;
 	event.data.ptr = conn;
 	epoll_ctl(conn->epfd, EPOLL_CTL_MOD, conn->fd, &event);
-	get_file_info(conn);
+	int status = get_file_info(conn);
+	if(status == ERROR){
+		return ERROR;
+	}
 	append_res_line(conn);
 	append_res_header(conn);
 	conn->request->action = send_buffer;
+	return OK;
 }
 
 void change_to_request(conn_t* conn){

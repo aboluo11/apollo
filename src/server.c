@@ -8,9 +8,10 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <string.h>
 #include "server.h"
 
-dict_t* header_dict;
+config_t config;
 
 void startup(){
 	signal(SIGPIPE, SIG_IGN);
@@ -25,7 +26,7 @@ void startup(){
 	epoll_add_listen_fd(listen_fd, epfd);
 	events = malloc(MAXEVENTS * sizeof(struct epoll_event));
 	while(1){
-		int n = epoll_wait(epfd, events, MAXEVENTS, 100);
+		int n = epoll_wait(epfd, events, MAXEVENTS, 20);
 		for(int i=0; i<n; i++){
 			int fd = *((int*)(events[i].data.ptr));
 			if(fd == listen_fd){
@@ -50,7 +51,46 @@ void startup(){
 	}
 }
 
+int config_init(char* directive, char* value){
+	if(strcmp(directive, "-p") == 0){
+		config.port = stoi(value);
+	}else if(strcmp(directive, "-r") == 0){
+		config.root = value;
+	}else{
+		return ERROR;
+	}
+	return OK;
+}
+
+void config_init_error(){
+	printf("usage: apollo -p port -r root_path\n");
+	exit(0);
+}
+
+int valid_config(){
+	if(config.port && config.root){
+		return OK;
+	}else{
+		return ERROR;
+	}
+}
+
 int main(int argc, char* argv[]){
+	int i = 1;
+	while(i < argc && i + 1 < argc){
+		char* directive = argv[i];
+		char* value = argv[i + 1];
+		int status = config_init(directive, value);
+		if(status == ERROR){
+			config_init_error();
+		}else{
+			i += 2;
+		}
+	}
+	if(valid_config() == ERROR){
+		config_init_error();
+	}
+
 	if(DEBUG){
 		goto debug;
 	}

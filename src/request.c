@@ -71,8 +71,7 @@ int handle_request(conn_t* conn){
         int status = request->action(conn);
         if(status == ERROR) return ERROR;
         else if(status == OK){
-            change_to_response(conn);
-            return OK;
+            return change_to_response(conn);
         }else if(status == AGAIN){
             if(buffer->free == 0){
                 ib_realloc(conn);

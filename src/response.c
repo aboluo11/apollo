@@ -98,25 +98,27 @@ int send_file(conn_t* conn){
     }
 }
 
-void get_file_info(conn_t* conn){
+int get_file_info(conn_t* conn){
     request_t* request = conn->request;
-    char* root = "/root/share/apollo/www";
-    char* path = str_cat(conn, root, request->uri_start);
+    char* path = str_cat(conn, config.root, request->uri_start);
     int file_fd = open(path, O_RDONLY);
     if(file_fd == -1){
+        if(request->status_code == 404){
+            return ERROR;
+        }
         request->status_code = 404;
         request->uri_start = "/404.html";
-        get_file_info(conn);
+        return get_file_info(conn);
     }else{
         struct stat file_stat;
         fstat(file_fd, &file_stat);
         if(S_ISDIR(file_stat.st_mode)){
             request->uri_start = str_cat(conn, request->uri_start, "index.html");
-            get_file_info(conn);
-            return;
+            return get_file_info(conn);
         }
         request->file_fd = file_fd;
         request->content_length = file_stat.st_size;
+        return OK;
     }
 }
 
