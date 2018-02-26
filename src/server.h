@@ -109,7 +109,7 @@ typedef struct conn{
 	apl_timer_t* timer;
 } conn_t;
 
-void ib_realloc(conn_t* conn);
+int ib_realloc(conn_t* conn);
 void ob_realloc(conn_t* conn);
 void append_out_buffer(conn_t* conn, char* data);
 
