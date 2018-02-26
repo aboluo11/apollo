@@ -32,10 +32,13 @@ void timers_del(apl_timer_t* timer){
         timers.tail = NULL;
     }else if(timer == timers.head){
         timers.head = timer->next;
+        timers.head->pre = NULL;
     }else if(timer == timers.tail){
         timers.tail = timer->pre;
+        timers.tail->next = NULL;
     }else{
         timer->pre->next = timer->next;
+        timer->next->pre = timer->pre;
     }
     timer->pre = NULL;
     timer->next = NULL;
