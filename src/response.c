@@ -51,11 +51,11 @@ int send_one_buffer(conn_t* conn){
     buffer_t* buffer = conn->request->ob;
     int need_to_send = buffer->end - buffer->free - buffer->pos;
     while(1){
+        if(need_to_send == 0) return OK;
         int n = send(conn->fd, buffer->pos, need_to_send, 0);
         if(n > 0){
             buffer->pos += n;
             need_to_send -= n;
-            if(need_to_send == 0) return OK;
         }else if(n == -1){
             if(errno == EAGAIN || errno == EWOULDBLOCK){
                 return AGAIN;

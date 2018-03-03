@@ -1,6 +1,7 @@
 .vscode
-test
+test/build
 build
 nohup.out
 .vs
 www/welcome.html
+mytest

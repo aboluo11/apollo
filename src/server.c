@@ -13,6 +13,12 @@
 
 config_t config;
 
+dict_t* header_dict_init(){
+    dict_t* dict = dict_init(256);
+    dict_add(dict, "Connection", header_conn_handler);
+    return dict;
+}
+
 void startup(){
 	signal(SIGPIPE, SIG_IGN);
 	header_dict = header_dict_init();

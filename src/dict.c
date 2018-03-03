@@ -53,9 +53,3 @@ void dict_add(dict_t* dict, char* key, header_handler handler){
     node->key = key;
     node->handler = handler;
 }
-
-dict_t* header_dict_init(){
-    dict_t* dict = dict_init(256);
-    dict_add(dict, "Connection", header_conn_handler);
-    return dict;
-}
